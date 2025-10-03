@@ -1,0 +1,18 @@
+# Build products
+*.bin
+*.elf
+*.hex
+
+# Arduino upload cache
+*.ino.cpp
+*.ino.bin
+
+# Local secrets and Wi-Fi credentials
+arduino_secrets.h
+secrets/
+*.local.h
+
+# IDE metadata
+.vscode/
+.idea/
+.DS_Store
