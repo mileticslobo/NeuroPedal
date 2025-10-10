@@ -2,10 +2,10 @@
 
 NeuroPedal is a custom controller for a rehabilitation exercise bike based on an
 Arduino UNO R4 WiFi. The project repurposes an old Cinesport RECK MOTOmed Viva 1
-physiotherapy bicycle by bypassing its original control electronics and driving
-the 24 V DC traction motor through a BTS7960 H-bridge. Motor current is sampled
-with an ACS758 Hall-effect sensor so the firmware can detect muscle spasms and
-react automatically to protect the rider.
+physiotherapy bicycle by bypassing its original control electronics and instead using a
+24 V Dunkermotoren GR63×55 DC motor, driven by a BTS7960 H-bridge motor driver. Motor current is measured
+with a single ACS758-050B Hall-effect current sensor so the firmware can detect muscle
+spasms and react automatically to protect the rider.
 
 > ⚠️ **Safety first** – Modifying medical or rehabilitation hardware carries
 > real risk. Double-check your wiring, verify the firmware on a bench before a
@@ -30,12 +30,12 @@ react automatically to protect the rider.
 
 | Component | Notes |
 | --- | --- |
-| Arduino UNO R4 WiFi | Renesas RA4M1-based MCU with on-board Wi-Fi (WiFiS3).
-| BTS7960 43 A H-bridge | Drives the 24 V brushed DC motor in both directions.
-| ACS758 (50 A/100 A) | Linear Hall-effect current sensor with galvanic isolation.
-| 24 V DC Motor | Original MOTOmed Viva 1 traction motor.
-| Power Supply | 24 V supply sized for peak motor current.
-| Misc. wiring & protection | Fuses, emergency stop, chassis bonding, etc.
+| Arduino UNO R4 WiFi | Renesas RA4M1-based MCU with on-board Wi-Fi (WiFiS3). |
+| BTS7960 43 A H-bridge | Drives the 24 V brushed DC motor in both directions. |
+| ACS758-050B (50 A) | Linear Hall-effect current sensor with galvanic isolation. One sensor is used. |
+| 24 V Dunkermotoren GR63×55 DC Motor | Replaces the original MOTOmed Viva 1 traction motor. |
+| Power Supply | 24 V supply sized for peak motor current. |
+| Misc. wiring & protection | Fuses, emergency stop, chassis bonding, etc. |
 
 Adapt the wiring harness to your bike while keeping galvanic isolation between
 low-voltage control electronics and the 24 V power stage.
@@ -131,5 +131,6 @@ recovery profiles for different therapeutic needs.
 
 ## License
 
-Released under the [MIT License](LICENSE). © 2025 Slobodan Miletic, Plus
-Innovative.
+Specify your preferred open-source license here (e.g. MIT, Apache-2.0, GPL).
+Add the full text in a separate `LICENSE` file before publishing the GitHub
+repository.
