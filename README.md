@@ -131,6 +131,5 @@ recovery profiles for different therapeutic needs.
 
 ## License
 
-Specify your preferred open-source license here (e.g. MIT, Apache-2.0, GPL).
-Add the full text in a separate `LICENSE` file before publishing the GitHub
-repository.
+Released under the [MIT License](LICENSE). © 2025 Slobodan Miletic, Plus
+Innovative.

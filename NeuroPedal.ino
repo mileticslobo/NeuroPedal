@@ -10,9 +10,9 @@ constexpr uint8_t LPWM = 6;
 constexpr uint8_t R_EN = 7;
 constexpr uint8_t L_EN = 8;
 
-// Current sensor pins
-constexpr uint8_t R_IS = A0;
-constexpr uint8_t L_IS = A1;
+// Single external current sensor (ACS758) setup:
+// Wire ACS758 VOUT -> A0 (through 10k; add 100nF from A0 to GND).
+constexpr uint8_t CS_PIN = A0;
 
 // Hardware constants for ACS758 current sensor (adjust to your specific part)
 constexpr float ADC_VREF = 5.0f;
@@ -42,8 +42,7 @@ enum class RecoveryStep : uint8_t {
 };
 
 struct CurrentOffsets {
-  uint16_t forwardRaw = ADC_MAX / 2;
-  uint16_t reverseRaw = ADC_MAX / 2;
+  uint16_t offsetRaw = ADC_MAX / 2;
 };
 
 struct SystemState {
@@ -69,8 +68,7 @@ struct SystemState {
   unsigned long recoveryStartMillis = 0;
   unsigned long runDurationSeconds = 5 * 60;
 
-  float filteredForwardCurrent = 0.0f;
-  float filteredReverseCurrent = 0.0f;
+  float filteredCurrent = 0.0f;
   float lastUsedCurrent = 0.0f;
   int remainingSeconds = 0;
 };
@@ -90,7 +88,7 @@ void handleSpasm(unsigned long now);
 void handleRecovery(unsigned long now);
 void updateCurrentReadings();
 void calibrateCurrentOffsets();
-float readSensorAmps(uint8_t pin, uint16_t offsetRaw);
+float readSensorAmps(uint16_t offsetRaw);
 float getCurrentForDirection(MotorDirection direction);
 void applyMotorOutputs(MotorDirection direction, int percent);
 void stopMotor();
@@ -428,56 +426,42 @@ void handleRecovery(unsigned long now) {
 }
 
 void updateCurrentReadings() {
-  float forward = readSensorAmps(R_IS, currentOffsets.forwardRaw);
-  float reverse = readSensorAmps(L_IS, currentOffsets.reverseRaw);
+  float i = readSensorAmps(currentOffsets.offsetRaw);
 
   if (!state.currentsInitialised) {
-    state.filteredForwardCurrent = forward;
-    state.filteredReverseCurrent = reverse;
+    state.filteredCurrent = i;
     state.currentsInitialised = true;
   } else {
-    state.filteredForwardCurrent += FILTER_ALPHA * (forward - state.filteredForwardCurrent);
-    state.filteredReverseCurrent += FILTER_ALPHA * (reverse - state.filteredReverseCurrent);
+    state.filteredCurrent += FILTER_ALPHA * (i - state.filteredCurrent);
   }
 }
 
 void calibrateCurrentOffsets() {
   const int samples = 200;
-  uint32_t forwardSum = 0;
-  uint32_t reverseSum = 0;
+  uint32_t sum = 0;
 
   for (int i = 0; i < samples; ++i) {
-    forwardSum += analogRead(R_IS);
-    reverseSum += analogRead(L_IS);
+    sum += analogRead(CS_PIN);
     delay(2);
   }
 
-  currentOffsets.forwardRaw = forwardSum / samples;
-  currentOffsets.reverseRaw = reverseSum / samples;
+  currentOffsets.offsetRaw = sum / samples;
   state.currentsInitialised = false;
 
-  Serial.print("Current sensors calibrated. Offsets -> Forward: ");
-  Serial.print(currentOffsets.forwardRaw);
-  Serial.print(" Reverse: ");
-  Serial.println(currentOffsets.reverseRaw);
+  Serial.print("Current sensor calibrated. Offset: ");
+  Serial.println(currentOffsets.offsetRaw);
 }
 
-float readSensorAmps(uint8_t pin, uint16_t offsetRaw) {
-  int raw = analogRead(pin);
+float readSensorAmps(uint16_t offsetRaw) {
+  int raw = analogRead(CS_PIN);
   int delta = raw - (int)offsetRaw;
   float voltageDelta = (delta * ADC_VREF) / (float)ADC_MAX;
   float amps = voltageDelta / SENSOR_SENSITIVITY_V_PER_A;
   return fabsf(amps);
 }
 
-float getCurrentForDirection(MotorDirection direction) {
-  if (direction == MotorDirection::Forward) {
-    return state.filteredForwardCurrent;
-  }
-  if (direction == MotorDirection::Reverse) {
-    return state.filteredReverseCurrent;
-  }
-  return max(state.filteredForwardCurrent, state.filteredReverseCurrent);
+float getCurrentForDirection(MotorDirection /*direction*/) {
+  return state.filteredCurrent;
 }
 
 void applyMotorOutputs(MotorDirection direction, int percent) {
@@ -607,8 +591,7 @@ String buildStatusJson() {
   json += ",\"speedPercent\":" + String(state.targetSpeedPercent);
   json += ",\"remainingSeconds\":" + String(state.remainingSeconds);
   json += ",\"thresholdAmp\":" + String(state.thresholdAmp, 2);
-  json += ",\"currentForward\":" + String(state.filteredForwardCurrent, 2);
-  json += ",\"currentReverse\":" + String(state.filteredReverseCurrent, 2);
+  json += ",\"current\":" + String(state.filteredCurrent, 2);
   json += ",\"lastCurrent\":" + String(state.lastUsedCurrent, 2);
   json += ",\"spasmDetected\":" + String(state.spasmDetected ? "true" : "false");
   json += ",\"wifi\":\"";
