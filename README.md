@@ -28,14 +28,14 @@ spasms and react automatically to protect the rider.
 
 ## Hardware Overview
 
-| Component | Notes |
-| --- | --- |
-| Arduino UNO R4 WiFi | Renesas RA4M1-based MCU with on-board Wi-Fi (WiFiS3). |
-| BTS7960 43 A H-bridge | Drives the 24 V brushed DC motor in both directions. |
-| ACS758-050B (50 A) | Linear Hall-effect current sensor with galvanic isolation. One sensor is used. |
-| 24 V Dunkermotoren GR63×55 DC Motor | Replaces the original MOTOmed Viva 1 traction motor. |
-| Power Supply | 24 V supply sized for peak motor current. |
-| Misc. wiring & protection | Fuses, emergency stop, chassis bonding, etc. |
+| Component                           | Notes                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| Arduino UNO R4 WiFi                 | Renesas RA4M1-based MCU with on-board Wi-Fi (WiFiS3).                          |
+| BTS7960 43 A H-bridge               | Drives the 24 V brushed DC motor in both directions.                           |
+| ACS758-050B (50 A)                  | Linear Hall-effect current sensor with galvanic isolation. One sensor is used. |
+| 24 V Dunkermotoren GR63×55 DC Motor | The original MOTOmed Viva 1 traction motor.                                    |
+| Power Supply                        | 24 V supply sized for peak motor current.                                      |
+| Misc. wiring & protection           | Fuses, emergency stop, chassis bonding, etc.                                   |
 
 Adapt the wiring harness to your bike while keeping galvanic isolation between
 low-voltage control electronics and the 24 V power stage.
@@ -54,13 +54,14 @@ NeuroPedal/
 ## Getting Started
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/<your-account>/NeuroPedal.git
    ```
 
 2. **Install the board support**
    - Add the Arduino UNO R4 packages in the Arduino IDE or with `arduino-cli
-     board install arduino:renesas_uno`.
+board install arduino:renesas_uno`.
    - Install the `WiFiS3` library if it is not already bundled.
 
 3. **Create your Wi-Fi secrets file**
