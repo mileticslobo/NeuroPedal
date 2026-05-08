@@ -22,6 +22,8 @@ constexpr float SENSOR_SENSITIVITY_V_PER_A = 0.04f; // 40 mV per ampere for ACS7
 constexpr float FILTER_ALPHA = 0.25f;               // Weight for exponential smoothing of current readings
 
 // Wi-Fi configuration
+constexpr unsigned long SERIAL_WAIT_TIMEOUT_MS = 2500;
+constexpr unsigned long STATUS_LOG_INTERVAL_MS = 5000;
 constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 20000;
 constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 15000;
 
@@ -71,6 +73,7 @@ struct SystemState {
   float filteredCurrent = 0.0f;
   float lastUsedCurrent = 0.0f;
   int remainingSeconds = 0;
+  unsigned long spasmBlankUntil = 0;
 };
 
 WiFiServer server(80);
@@ -80,6 +83,11 @@ CurrentOffsets currentOffsets;
 
 // Forward declarations
 void configureHardware();
+void waitForSerial();
+void printBootDiagnostics();
+void printSerialHelp();
+void handleSerialCommands();
+void printPeriodicStatus(unsigned long now);
 void connectWiFi();
 void ensureWiFi();
 void handleMotor(unsigned long now);
@@ -87,7 +95,7 @@ void handleTimer(unsigned long now);
 void handleSpasm(unsigned long now);
 void handleRecovery(unsigned long now);
 void updateCurrentReadings();
-void calibrateCurrentOffsets();
+bool calibrateCurrentOffsets();
 float readSensorAmps(uint16_t offsetRaw);
 float getCurrentForDirection(MotorDirection direction);
 void applyMotorOutputs(MotorDirection direction, int percent);
@@ -101,6 +109,9 @@ String buildStatusJson();
 void processControlQuery(const String &query, WiFiClient &client);
 bool extractQueryValue(const String &query, const char *key, String &value);
 void startMotorSession(MotorDirection direction);
+void stopMotorSession(const char *reason);
+const char *directionName(MotorDirection direction);
+int speedPercentToPwm(int percent);
 
 const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
@@ -216,20 +227,28 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
 void setup() {
   Serial.begin(115200);
+  waitForSerial();
+  Serial.println();
+  Serial.println("NeuroPedal booting.");
   configureHardware();
+  printBootDiagnostics();
+  printSerialHelp();
   connectWiFi();
   server.begin();
+  Serial.println("HTTP server started.");
 }
 
 void loop() {
   unsigned long now = millis();
 
+  handleSerialCommands();
   ensureWiFi();
   handleMotor(now);
   handleTimer(now);
   handleSpasm(now);
   handleRecovery(now);
   handleNetwork();
+  printPeriodicStatus(now);
 }
 
 void configureHardware() {
@@ -244,6 +263,141 @@ void configureHardware() {
   digitalWrite(L_EN, HIGH);
 
   stopMotor();
+}
+
+void waitForSerial() {
+  unsigned long start = millis();
+  while (!Serial && (millis() - start) < SERIAL_WAIT_TIMEOUT_MS) {
+    delay(10);
+  }
+}
+
+void printBootDiagnostics() {
+  Serial.print("Motor pins: RPWM=D");
+  Serial.print(RPWM);
+  Serial.print(" LPWM=D");
+  Serial.print(LPWM);
+  Serial.print(" R_EN=D");
+  Serial.print(R_EN);
+  Serial.print(" L_EN=D");
+  Serial.println(L_EN);
+
+  Serial.print("Current sensor: A");
+  Serial.print(CS_PIN - A0);
+  Serial.print(" ADC bits=");
+  Serial.print(ADC_RESOLUTION);
+  Serial.print(" initialOffset=");
+  Serial.println(currentOffsets.offsetRaw);
+
+  Serial.print("Initial speed=");
+  Serial.print(state.targetSpeedPercent);
+  Serial.print("% pwm=");
+  Serial.println(speedPercentToPwm(state.targetSpeedPercent));
+}
+
+void printSerialHelp() {
+  Serial.println("Serial commands: f=start forward, r=start reverse, s=stop, +=speed up, -=speed down, c=calibrate, ?=help");
+}
+
+void handleSerialCommands() {
+  while (Serial.available() > 0) {
+    char command = Serial.read();
+    if (command >= 'A' && command <= 'Z') {
+      command = command - 'A' + 'a';
+    }
+
+    switch (command) {
+      case 'f':
+        startMotorSession(MotorDirection::Forward);
+        break;
+
+      case 'r':
+        startMotorSession(MotorDirection::Reverse);
+        break;
+
+      case 's':
+        stopMotorSession("serial stop");
+        break;
+
+      case '+':
+        state.targetSpeedPercent = constrain(state.targetSpeedPercent + 5, 0, 100);
+        Serial.print("Speed set to ");
+        Serial.print(state.targetSpeedPercent);
+        Serial.print("% pwm=");
+        Serial.println(speedPercentToPwm(state.targetSpeedPercent));
+        if (state.motorEnabled && !state.spasmDetected) {
+          applyMotorOutputs(state.requestedDirection, state.targetSpeedPercent);
+        }
+        break;
+
+      case '-':
+        state.targetSpeedPercent = constrain(state.targetSpeedPercent - 5, 0, 100);
+        Serial.print("Speed set to ");
+        Serial.print(state.targetSpeedPercent);
+        Serial.print("% pwm=");
+        Serial.println(speedPercentToPwm(state.targetSpeedPercent));
+        if (state.motorEnabled && !state.spasmDetected) {
+          applyMotorOutputs(state.requestedDirection, state.targetSpeedPercent);
+        }
+        break;
+
+      case 'c':
+        if (state.motorEnabled) {
+          Serial.println("Calibration refused: stop motor first.");
+        } else {
+          stopMotor();
+          state.appliedDirection = MotorDirection::Stopped;
+          delay(50);
+          calibrateCurrentOffsets();
+        }
+        break;
+
+      case '?':
+        printSerialHelp();
+        break;
+
+      case '\n':
+      case '\r':
+      case ' ':
+      case '\t':
+        break;
+
+      default:
+        Serial.print("Unknown serial command: ");
+        Serial.println(command);
+        printSerialHelp();
+        break;
+    }
+  }
+}
+
+void printPeriodicStatus(unsigned long now) {
+  static unsigned long lastLog = 0;
+  if (now - lastLog < STATUS_LOG_INTERVAL_MS) {
+    return;
+  }
+
+  lastLog = now;
+  Serial.print("Status: wifi=");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print(WiFi.localIP());
+  } else {
+    Serial.print("disconnected");
+  }
+  Serial.print(" motor=");
+  Serial.print(state.motorEnabled ? "enabled" : "disabled");
+  Serial.print(" requested=");
+  Serial.print(directionName(state.requestedDirection));
+  Serial.print(" applied=");
+  Serial.print(directionName(state.appliedDirection));
+  Serial.print(" speed=");
+  Serial.print(state.targetSpeedPercent);
+  Serial.print("% pwm=");
+  Serial.print(speedPercentToPwm(state.targetSpeedPercent));
+  Serial.print(" current=");
+  Serial.print(state.filteredCurrent, 2);
+  Serial.print("A spasm=");
+  Serial.println(state.spasmDetected ? "yes" : "no");
 }
 
 void connectWiFi() {
@@ -316,12 +470,7 @@ void handleTimer(unsigned long now) {
     long remaining = (long)state.runDurationSeconds - (long)elapsedSeconds;
 
     if (remaining <= 0) {
-      Serial.println("Timer complete. Stopping motor.");
-      state.motorEnabled = false;
-      state.timerRunning = false;
-      state.remainingSeconds = 0;
-      stopMotor();
-      state.appliedDirection = MotorDirection::Stopped;
+      stopMotorSession("timer complete");
     } else {
       state.remainingSeconds = (int)remaining;
     }
@@ -347,6 +496,10 @@ void handleSpasm(unsigned long now) {
 
   float currentUsed = getCurrentForDirection(state.requestedDirection);
   state.lastUsedCurrent = currentUsed;
+
+  if (now < state.spasmBlankUntil) {
+    return;
+  }
 
   if (currentUsed >= state.thresholdAmp) {
     Serial.print("Spasm detected. Current: ");
@@ -402,11 +555,7 @@ void handleRecovery(unsigned long now) {
 
     case RecoveryStep::StopConfirmed:
       if (currentUsed >= state.thresholdAmp) {
-        Serial.println("Persistent spasm. Stopping motor.");
-        stopMotor();
-        state.appliedDirection = MotorDirection::Stopped;
-        state.motorEnabled = false;
-        state.timerRunning = false;
+        stopMotorSession("persistent spasm");
       } else {
         Serial.println("Recovery after direction reversal successful.");
         applyMotorOutputs(state.requestedDirection, state.targetSpeedPercent);
@@ -436,20 +585,49 @@ void updateCurrentReadings() {
   }
 }
 
-void calibrateCurrentOffsets() {
+bool calibrateCurrentOffsets() {
   const int samples = 200;
+  uint16_t buf[samples];
   uint32_t sum = 0;
 
   for (int i = 0; i < samples; ++i) {
-    sum += analogRead(CS_PIN);
+    buf[i] = analogRead(CS_PIN);
+    sum += buf[i];
     delay(2);
   }
 
-  currentOffsets.offsetRaw = sum / samples;
-  state.currentsInitialised = false;
+  uint16_t mean = sum / samples;
 
-  Serial.print("Current sensor calibrated. Offset: ");
-  Serial.println(currentOffsets.offsetRaw);
+  uint32_t sumSq = 0;
+  for (int i = 0; i < samples; ++i) {
+    int32_t d = (int32_t)buf[i] - (int32_t)mean;
+    sumSq += (uint32_t)(d * d);
+  }
+  float stdev = sqrtf((float)sumSq / samples);
+
+  // Bidirectional variants idle near Vcc/2; unidirectional variants idle
+  // near 0.6 V. Accept anything well inside the ADC range, and trust the
+  // std-dev check to catch "motor still moving" or broken-supply cases.
+  bool plausible = (mean > 200 && mean < (ADC_MAX - 200)) && (stdev < 12.0f);
+  if (!plausible) {
+    Serial.print("Calibration rejected. mean=");
+    Serial.print(mean);
+    Serial.print(" stdev=");
+    Serial.println(stdev);
+    return false;
+  }
+
+  currentOffsets.offsetRaw = mean;
+  state.currentsInitialised = false;
+  state.filteredCurrent = 0.0f;
+  state.lastUsedCurrent = 0.0f;
+  state.spasmBlankUntil = millis() + 300;
+
+  Serial.print("Calibrated. offset=");
+  Serial.print(mean);
+  Serial.print(" stdev=");
+  Serial.println(stdev);
+  return true;
 }
 
 float readSensorAmps(uint16_t offsetRaw) {
@@ -466,7 +644,7 @@ float getCurrentForDirection(MotorDirection /*direction*/) {
 
 void applyMotorOutputs(MotorDirection direction, int percent) {
   percent = constrain(percent, 0, 100);
-  int pwm = map(percent, 0, 100, 0, 255);
+  int pwm = speedPercentToPwm(percent);
 
   switch (direction) {
     case MotorDirection::Forward:
@@ -648,23 +826,18 @@ void processControlQuery(const String &query, WiFiClient &client) {
     if (value == "start") {
       startMotorSession(state.requestedDirection);
     } else if (value == "stop") {
-      state.motorEnabled = false;
-      state.timerRunning = false;
-      state.remainingSeconds = 0;
+      stopMotorSession("HTTP stop");
+    } else if (value == "calibrate") {
+      if (state.motorEnabled) {
+        // Refuse: regen current from a coasting motor poisons the offset,
+        // and auto-restarting after calibration was the spike source.
+        sendJson(client, String("{\"error\":\"stop motor before calibrating\"}"));
+        return;
+      }
       stopMotor();
       state.appliedDirection = MotorDirection::Stopped;
-    } else if (value == "calibrate") {
-      bool wasEnabled = state.motorEnabled;
-      if (wasEnabled) {
-        state.motorEnabled = false;
-        stopMotor();
-        state.appliedDirection = MotorDirection::Stopped;
-        delay(200);
-      }
+      delay(50);
       calibrateCurrentOffsets();
-      if (wasEnabled) {
-        startMotorSession(state.requestedDirection);
-      }
     }
   }
 
@@ -690,6 +863,13 @@ bool extractQueryValue(const String &query, const char *key, String &value) {
 }
 
 void startMotorSession(MotorDirection direction) {
+  Serial.print("Starting motor: direction=");
+  Serial.print(directionName(direction));
+  Serial.print(" speed=");
+  Serial.print(state.targetSpeedPercent);
+  Serial.print("% pwm=");
+  Serial.println(speedPercentToPwm(state.targetSpeedPercent));
+
   state.motorEnabled = true;
   state.spasmDetected = false;
   state.requestedDirection = direction;
@@ -701,7 +881,40 @@ void startMotorSession(MotorDirection direction) {
   state.lastSecondTick = now;
   state.remainingSeconds = (int)state.runDurationSeconds;
   state.timerRunning = state.runDurationSeconds > 0;
+  state.spasmBlankUntil = now + 300;
 
   applyMotorOutputs(direction, state.targetSpeedPercent);
   state.appliedDirection = direction;
+}
+
+void stopMotorSession(const char *reason) {
+  state.motorEnabled = false;
+  state.timerRunning = false;
+  state.remainingSeconds = 0;
+  stopMotor();
+  state.appliedDirection = MotorDirection::Stopped;
+
+  Serial.print("Motor stopped");
+  if (reason && strlen(reason) > 0) {
+    Serial.print(": ");
+    Serial.print(reason);
+  }
+  Serial.println();
+}
+
+const char *directionName(MotorDirection direction) {
+  switch (direction) {
+    case MotorDirection::Forward:
+      return "forward";
+    case MotorDirection::Reverse:
+      return "reverse";
+    case MotorDirection::Stopped:
+    default:
+      return "stopped";
+  }
+}
+
+int speedPercentToPwm(int percent) {
+  percent = constrain(percent, 0, 100);
+  return map(percent, 0, 100, 0, 255);
 }
