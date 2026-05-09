@@ -119,7 +119,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NeuroPedal Controller</title>
+  <title>cs-motomed-controller Controller</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 16px; background: #f4f4f4; }
     h1 { font-size: 1.4rem; }
@@ -134,7 +134,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 </head>
 <body>
   <section>
-    <h1>NeuroPedal Controller</h1>
+    <h1>cs-motomed-controller Controller</h1>
     <div class="grid">
       <button id="startButton">Start</button>
       <button id="stopButton" class="stop">Stop</button>
@@ -229,7 +229,7 @@ void setup() {
   Serial.begin(115200);
   waitForSerial();
   Serial.println();
-  Serial.println("NeuroPedal booting.");
+  Serial.println("cs-motomed-controller booting.");
   configureHardware();
   printBootDiagnostics();
   printSerialHelp();

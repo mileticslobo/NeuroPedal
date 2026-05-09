@@ -1,6 +1,6 @@
-# Contributing to NeuroPedal
+# Contributing to cs-motomed-controller
 
-Thank you for considering improvements to NeuroPedal. This project repurposes a
+Thank you for considering improvements to cs-motomed-controller. This project repurposes a
 legacy Cinesport RECK MOTOmed Viva 1 rehabilitation bike, so every change should
 prioritise rider safety and transparency.
 
