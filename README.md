@@ -1,8 +1,7 @@
 # cs-motomed-controller
 
 cs-motomed-controller is a custom controller for a rehabilitation exercise bike based on Arduino UNO R4 WiFi. The project repurposes an Cinesport RECK MOTOmed Viva 1
-physiotherapy bicycle by bypassing its original control electronics and instead using a
-24 V Dunkermotoren GR63×55 DC motor, driven by a BTS7960 H-bridge motor driver. Motor current is measured with a single ACS758-050B Hall-effect current sensor so the firmware can detect muscle spasms and react automatically to protect the rider.
+physiotherapy bicycle by bypassing its original control electronics.
 
 > ⚠️ **Safety first** – Modifying medical or rehabilitation hardware carries
 > real risk. Double-check your wiring, verify the firmware on a bench before a
@@ -25,20 +24,20 @@ physiotherapy bicycle by bypassing its original control electronics and instead 
 
 ## Hardware Overview
 
-| Component                                     | Notes                                                                          |
-| --------------------------------------------- | ------------------------------------------------------------------------------ |
-| Arduino UNO R4 WiFi                           | Renesas RA4M1-based MCU with on-board Wi-Fi (WiFiS3).                          |
-| BTS7960 43 A H-bridge                         | Drives the 24 V brushed DC motor in both directions.                           |
-| ACS758-050B (50 A)                            | Linear Hall-effect current sensor with galvanic isolation. One sensor is used. |
-| 24 V Dunkermotoren GR63×55 DC Motor           | The original MOTOmed Viva 1 traction motor.                                    |
-| DC25A 600W Buck Constant Current Power Module | DC12-75V DC Buck Converter Adjustable Regulator LED Driver for power supply.   |
-| PLR DD4012SA 1A DC 5-40V to 12V Regulator     | DC-DC Step-Down Buck Converter Module Board for voltage regulation.            |
-| Bridge Rectifier (10pcs GBJ3510 ZIP)          | 35A 1000V new original bridge rectifier for AC to DC conversion.               |
-| 50V 4700UF Capacitors                         | Used in the power circuit for smoothing and filtering.                         |
-| 100k Resistors                                | Used in various circuit configurations.                                        |
-| Aluminium Alloy Casing                        | Enclosure for the electronics with 3D printed hold supports inside for boards. |
-| Power Supply                                  | 24 V supply sized for peak motor current.                                      |
-| Misc. wiring & protection                     | Fuses, emergency stop, chassis bonding, etc.                                   |
+| Component                                     | Notes                                                                                 |
+| --------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Arduino UNO R4 WiFi                           | Renesas RA4M1-based MCU with on-board Wi-Fi (WiFiS3).                                 |
+| BTS7960 43 A H-bridge                         | Drives the 24 V brushed DC motor in both directions.                                  |
+| ACS758-050B (50 A)                            | Linear Hall-effect current sensor with galvanic isolation. One sensor is used.        |
+| 24 V Dunkermotoren GR63×55 DC Motor           | The original MOTOmed Viva 1 traction motor.                                           |
+| DC25A 600W Buck Constant Current Power Module | DC12-75V DC Buck Converter Adjustable Regulator LED Driver for power supply.          |
+| PLR DD4012SA 1A DC 5-40V to 12V Regulator     | DC-DC Step-Down Buck Converter Module Board for voltage regulation.                   |
+| Bridge Rectifier (10pcs GBJ3510 ZIP)          | 35A 1000V new original bridge rectifier for converting 24V AC from transformer to DC. |
+| 50V 4700UF Capacitors                         | Used in the power circuit for smoothing and filtering the rectified DC voltage.       |
+| 100k Resistors                                | Used in the voltage regulation circuit for precise 24V DC output.                     |
+| Aluminium Alloy Casing                        | Enclosure for the electronics with 3D printed hold supports inside for boards.        |
+| Power Supply                                  | 24 V supply sized for peak motor current.                                             |
+| Misc. wiring & protection                     | Fuses, emergency stop, chassis bonding, etc.                                          |
 
 Adapt the wiring harness to your bike while keeping galvanic isolation between
 low-voltage control electronics and the 24 V power stage.
